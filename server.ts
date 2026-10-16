@@ -2,11 +2,13 @@ import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 
-const clientId = process.env.DISCORD_CLIENT_ID;
-const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+const clientId = process.env.GOOGLE_CLIENT_ID;
+const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
 if (!clientId || !clientSecret) {
-  throw new Error("Discordの環境変数が設定されていません");
+  throw new Error(
+    "GOOGLE_CLIENT_ID と GOOGLE_CLIENT_SECRET を設定してください",
+  );
 }
 
 const redirectUri = "http://localhost:3000/callback";
@@ -19,11 +21,11 @@ const server = createServer(async (request, response) => {
       client_id: clientId,
       response_type: "code",
       redirect_uri: redirectUri,
-      scope: "identify",
+      scope: "openid email profile",
     });
 
     response.writeHead(302, {
-      Location: `https://discord.com/oauth2/authorize?${params}`,
+      Location: `https://accounts.google.com/o/oauth2/v2/auth?${params}`,
     });
 
     response.end();
@@ -53,7 +55,7 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -80,11 +82,14 @@ const server = createServer(async (request, response) => {
       access_token: string;
     };
 
-    const userResponse = await fetch("https://discord.com/api/users/@me", {
-      headers: {
-        Authorization: `Bearer ${token.access_token}`,
+    const userResponse = await fetch(
+      "https://openidconnect.googleapis.com/v1/userinfo",
+      {
+        headers: {
+          Authorization: `Bearer ${token.access_token}`,
+        },
       },
-    });
+    );
 
     if (!userResponse.ok) {
       response.writeHead(500, {
@@ -96,15 +101,15 @@ const server = createServer(async (request, response) => {
     }
 
     const user = (await userResponse.json()) as {
-      username: string;
-      id: string;
+      name?: string;
+      email?: string;
     };
 
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
     });
 
-    response.end(`<h1>こんにちは、${user.username}さん</h1>`);
+    response.end(`<h1>こんにちは、${user.name}(${user.email})さん</h1>`);
     return;
   }
 
